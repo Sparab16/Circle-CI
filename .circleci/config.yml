@@ -1,55 +1,52 @@
 version: 2.1
+orbs:
+  heroku: circleci/heroku@1.0.1
 jobs:
-  Hello-World:
+  build:
+    executor: heroku/default
     docker:
-      - image: alpine:3.7
-    steps:
-      - run:
-          name: Hello World
-          command: |
-            echo 'Hello World!'
-            echo 'This is the delivery pipeline froms Shreyas'
-  I-Have-Code:
-    docker:
-      - image: alpine:3.7
+      - image: circleci/python:3.6.2-stretch-browsers
+        auth:
+          username: mydockerhub-user
+          password: $DOCKERHUB_PASSWORD
     steps:
       - checkout
       - run:
-          name: Code has arrived
+          name: Install the python dependencies
           command: |
-            ls -al
-            echo '---That should look familier'
-  Run-With-Node:
-    docker:
-      - image: circleci/node:14-browsers
-    steps:
+            echo 'export TAG=0.1.${CIRCLE_BUILD_NUM}' >> $BASH_ENV
+            echo 'export IMAGE_NAME=${DOCKER_IMAGE_NAME}' >> $BASH_ENV
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+      - setup_remote_docker:
+          version: 19.03.13
       - run:
-          name: Running in a Container with Node
-          command: node -v
-  Now-Complete:
-    docker:
-      - image: alpine:3.7
+          name: Build and push Docker Image
+          command: |
+            docker build -t $DOCKERHUB_USER/$IMAGE_NAME:$TAG .
+            echo $DOCKER_HUB_PASSWORD_USER | docker login -u $DOCKERHUB_USER --password-stdin
+            docker push $DOCKERHUB_USER/$IMAGE_NAME:$TAG
+
+  deploy:
+    executor: heroku/default
     steps:
+      - checkout
+      - heroku/install
+      - setup_remote_docker:
+          version: 19.03.13
       - run:
-          name: Approval Complete
-          command: echo 'Do work once the approval has completed'
+          name: Pushing to heroku registry
+          command: |
+            heroku container:login
+            heroku container:push web -a $HEROKU_APP_NAME
+            heroku container:release web -a $HEROKU_APP_NAME
 
 workflows:
-  version: 2
-  Example_Workflow:
+  build-and-deploy:
     jobs:
-      - Hello-World
-      - I-Have-Code:
+      - build
+      - deploy:
           requires:
-            - Hello-World
-      - Run-With-Node:
-          requires:
-            - Hello-World
-      - Hold-For-Approval:
-          type: approval
-          requires:
-            - Run-With-Node
-            - I-Have-Code
-      - Now-Complete:
-          requires:
-            - Hold-For-Approval
+            - build
