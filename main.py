@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 @app.route('/', methods = ['GET'])
 def index():
-    message = 'Deployed to Heroku using Circle CI'
+    message = 'Version 2.0 Deployed on Heroku using Circle CI.'
     return "<h1>{}</h1>".format(message)
 
 port = int(os.getenv("PORT", 5000))
